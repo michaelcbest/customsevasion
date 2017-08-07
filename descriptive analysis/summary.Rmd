@@ -25,18 +25,18 @@ library(lfe)
 library(gridExtra)
 library(cowplot)
 library(knitr)
+library(pander)
 
 setwd(dirname(path.expand("~")))
 
-DataPath <- file.path(paste(getwd(),"Dropbox/BJ Customs Evasion", sep="/"))
-CodePath <- file.path(paste(getwd(),"Documents/Comtrade", sep = "/"))
+DataPath <- file.path(paste(getwd(),"Dropbox/Customs Evasion", sep="/"))
+CodePath <- file.path(paste(getwd(),"Documents/comtrade", sep = "/"))
 
 theme_set(theme_cowplot(font_size=10))
 
 ```
 
-#Clean data and create trade gap variables
-This is for a small subset of the UN Comtrade data: specifically, for years 2012-2016, products that start with a 0 in the HS 2012 classification system, and for countries that start with the letter "A" (Afghanistan) through "M" (Myanmar).
+This analysis is for the full 2012-2016 yearly Comtrade data using the HS2012 classification. 
 
 *Notes\:*
 
@@ -44,137 +44,56 @@ This is for a small subset of the UN Comtrade data: specifically, for years 2012
 
 - *The raw data contains re-exports and re-imports. These amounts are also included in a country's regular exports/imports as imports from one country to itself. For example, France has re-imports that are also included in France's imports as `Reporter` = France and `Partner` = France. This doesn't affect this analysis because there is no matched reporter/partner pair, but they might affect our trade gap measure if they're actually imports from an unforseen place. More on re-exports **[at this link.](https://unstats.un.org/unsd/tradekb/Knowledgebase/Reexports-and-Reimports)** *  
 
+- *Do we want to focus on the six-digit product code classifications? The two- and four-digit classifications should be, in theory, aggregates of the more detailed classifications.*  
+
 ```{r data clean, eval=FALSE}
 
-#Keep product codes starting with "0" and country pairs starting with letters "A" through "M"
-load(paste(DataPath,"Raw Data/Comtrade/Yearly/y_hs12/y_2012_hs12.Rda", sep = "/"))
-y_2012_hs12 <- as.data.table(y_2012_hs12)
+load(paste(DataPath,"Analysis Data/hs12_12.Rda", sep = "/"))
+hs12_12 <- hs12_12[!is.na(Log_gap)]
 
-y_2012_hs12 <- subset(y_2012_hs12,substr(y_2012_hs12$`Commodity Code`,1,1)=='0')
-y_2012_hs12 <- y_2012_hs12[grep("^[A-M]", y_2012_hs12$Reporter)]
-y_2012_hs12 <- y_2012_hs12[grep("^[A-M]", y_2012_hs12$Partner)]
+load(paste(DataPath,"Analysis Data/hs12_13.Rda", sep = "/"))
+hs12_13 <- hs12_13[!is.na(Log_gap)]
 
-load(paste(DataPath,"Raw Data/Comtrade/Yearly/y_hs12/y_2013_hs12.Rda", sep = "/"))
-y_2013_hs12 <- as.data.table(y_2013_hs12)
+load(paste(DataPath,"Analysis Data/hs12_14.Rda", sep = "/"))
+hs12_14 <- hs12_14[!is.na(Log_gap)]
 
-y_2013_hs12 <- subset(y_2013_hs12,substr(y_2013_hs12$`Commodity Code`,1,1)=='0')
-y_2013_hs12 <- y_2013_hs12[grep("^[A-M]", y_2013_hs12$Reporter)]
-y_2013_hs12 <- y_2013_hs12[grep("^[A-M]", y_2013_hs12$Partner)]
+load(paste(DataPath,"Analysis Data/hs12_15.Rda", sep = "/"))
+hs12_15 <- hs12_15[!is.na(Log_gap)]
 
-load(paste(DataPath,"Raw Data/Comtrade/Yearly/y_hs12/y_2014_hs12.Rda", sep = "/"))
-y_2014_hs12 <- as.data.table(y_2014_hs12)
+load(paste(DataPath,"Analysis Data/hs12_16.Rda", sep = "/"))
+hs12_16 <- hs12_16[!is.na(Log_gap)]
 
-y_2014_hs12 <- subset(y_2014_hs12,substr(y_2014_hs12$`Commodity Code`,1,1)=='0')
-y_2014_hs12 <- y_2014_hs12[grep("^[A-M]", y_2014_hs12$Reporter)]
-y_2014_hs12 <- y_2014_hs12[grep("^[A-M]", y_2014_hs12$Partner)]
+hs12_value <- do.call("rbind", list(hs12_12, hs12_13, hs12_14, hs12_15, hs12_16))
+rm(hs12_12, hs12_13, hs12_14, hs12_15, hs12_16)
 
-load(paste(DataPath,"Raw Data/Comtrade/Yearly/y_hs12/y_2015_hs12.Rda", sep = "/"))
-y_2015_hs12 <- as.data.table(y_2015_hs12)
+save(hs12_value,file = paste(DataPath,"Analysis Data","hs12_value.Rda", sep = "/"))
 
-y_2015_hs12 <- subset(y_2015_hs12,substr(y_2015_hs12$`Commodity Code`,1,1)=='0')
-y_2015_hs12 <- y_2015_hs12[grep("^[A-M]", y_2015_hs12$Reporter)]
-y_2015_hs12 <- y_2015_hs12[grep("^[A-M]", y_2015_hs12$Partner)]
-
-load(paste(DataPath,"Raw Data/Comtrade/Yearly/y_hs12/y_2016_hs12.Rda", sep = "/"))
-y_2016_hs12 <- as.data.table(y_2016_hs12)
-
-y_2016_hs12 <- subset(y_2016_hs12,substr(y_2016_hs12$`Commodity Code`,1,1)=='0')
-y_2016_hs12 <- y_2016_hs12[grep("^[A-M]", y_2016_hs12$Reporter)]
-y_2016_hs12 <- y_2016_hs12[grep("^[A-M]", y_2016_hs12$Partner)]
-
-#Combine HS 2012 data
-hs12 <- do.call("rbind", list(y_2012_hs12, y_2013_hs12, y_2014_hs12, y_2015_hs12, y_2016_hs12))
-
-rm(y_2012_hs12, y_2013_hs12, y_2014_hs12, y_2015_hs12, y_2016_hs12)
-
-#Create table where country is reporting imports
-hs12im <- hs12[`Trade Flow Code`==1]
-
-hs12im[ ,`:=`(Classification = NULL, Year = NULL, 
-                  `Period Desc.` = NULL, `Is Leaf Code` = NULL, 
-                  `Reporter ISO` = NULL, `Partner ISO` = NULL,
-                  `Qty Unit Code` = NULL,  Flag = NULL
-                  )]
-
-hs12im <- rename(hs12im, "Import Value" = "Trade Value (US$)") 
-hs12im <- rename(hs12im, "Import Qty Unit" = "Qty Unit")
-hs12im <- rename(hs12im, "Import Qty" = "Qty")
-hs12im <- rename(hs12im, "Import Netweight (kg)" = "Netweight (kg)")
-
-#Create table where country is reporting exports
-hs12ex <- hs12[`Trade Flow Code`==2]
-
-hs12ex[ ,`:=`(Classification = NULL, Year = NULL, 
-                  `Period Desc.` = NULL, `Is Leaf Code` = NULL, 
-                  `Reporter ISO` = NULL, `Partner ISO` = NULL,
-                  `Qty Unit Code` = NULL,  Flag = NULL
-                  )]
-
-hs12ex <- rename(hs12ex, "Export Value" = "Trade Value (US$)")
-hs12ex <- rename(hs12ex, "Export Qty Unit" = "Qty Unit")
-hs12ex <- rename(hs12ex, "Export Qty" = "Qty")
-hs12ex <- rename(hs12ex, "Export Netweight (kg)" = "Netweight (kg)")
-
-#Merge import and export tables together
-hs12 <- merge(hs12im, hs12ex, 
-             by.x=c("Period", "Aggregate Level", 
-                    "Reporter Code", "Reporter", "Partner Code", "Partner", 
-                    "Commodity Code", "Commodity"),
-             by.y=c("Period", "Aggregate Level", 
-                    "Partner Code", "Partner", "Reporter Code", "Reporter", 
-                    "Commodity Code", "Commodity"),all=TRUE)
-
-hs12 <- rename(hs12, "Importer" = "Reporter")
-hs12 <- rename(hs12, "Exporter" = "Partner")
-
-#Create variable of the trade value gap between what countries report
-hs12$Raw_gap = hs12$`Export Value` - hs12$`Import Value`
-
-#Create variable of the log trade value gap
-hs12$Log_gap = log(hs12$`Export Value`) - log(hs12$`Import Value`)
-
-#Create variable of the trade value gap as a ratio of total reported trade  
-hs12$Gap_ratio = hs12$`Raw_gap`/(hs12$`Import Value` + hs12$`Export Value`)
-
-#Repeat created variables but for the gap in quantity reported
-hs12$`Export Netweight (kg)` <- as.numeric(hs12$`Export Netweight (kg)`)
-hs12$`Import Netweight (kg)` <- as.numeric(hs12$`Import Netweight (kg)`)
-
-hs12$Qty_raw_gap = hs12$`Export Netweight (kg)` - hs12$`Import Netweight (kg)`
-
-hs12$Qty_log_gap = log(hs12$`Export Netweight (kg)`) - log(hs12$`Import Netweight (kg)`)
-
-hs12$Qty_gap_ratio = hs12$`Qty_raw_gap`/
-                    (hs12$`Export Netweight (kg)` + hs12$`Import Netweight (kg)`)
-
-save(hs12,file = paste(DataPath,"Analysis Data","hs12.Rda", sep = "/"))
-rm(hs12, hs12ex, hs12im)
+rm(hs12_value)
 
 ```
 
 #Value Trade Gap
 The difference between what the exporting country reports and what the importing country reports in US dollars.
 
-**Coverage**
+##Coverage
 ```{r value_coverage, eval=TRUE}
 load(paste(DataPath,"Analysis Data/hs12.Rda", sep = "/"))
 hs12 <- as.data.table(hs12)
 
 options(digits=2)
 
-#Remove observations where one or more countries do not report imports/exports. 
-#699,887 rows deleted. 
-hs12 <- hs12[!is.na(Log_gap)]
-
 #For each year, how many product*country pairs / all possible product*country pairs?
 
-product <- hs12[, uniqueN(`Commodity Code`)]
-product_year <- hs12[, uniqueN(`Commodity Code`), by=Period]
+load(paste(DataPath,"Analysis Data/hs12_value.Rda", sep = "/"))
+hs12_value <- hs12_value[, .(Period, `Commodity Code`, Importer, Exporter, Log_gap)]
+
+product <- hs12_value[, uniqueN(`Commodity Code`)]
+product_year <- hs12_value[, uniqueN(`Commodity Code`), by=Period]
 product_year <- rename(product_year, Products = V1)
 
-pair <- unique(setDT(hs12), by = c("Importer", "Exporter"))
+pair <- unique(setDT(hs12_value), by = c("Importer", "Exporter"))
 pair <- pair[, .N]
-pair_year <- unique(setDT(hs12), by = c("Importer", "Exporter", "Period"))
+pair_year <- unique(setDT(hs12_value), by = c("Importer", "Exporter", "Period"))
 pair_year <- pair_year[, .N, by=Period]
 pair_year <- rename(pair_year, Pairs = N)
 
@@ -183,18 +102,18 @@ year_coverage$Total_products <- product
 year_coverage$Total_pairs <- pair
 
 year_coverage$Coverage <- (year_coverage$Products*year_coverage$Pairs)/
-                          (year_coverage$Total_products*year_coverage$Total_pair)
+  (year_coverage$Total_products*year_coverage$Total_pair)
 
-year_coverage
+pander(year_coverage)
 rm(pair_year, product_year, year_coverage)
 
 #For each product, how many year*country pairs / all possible year*country pairs?
 
-year <- hs12[, uniqueN(`Period`)]
-year_product <- hs12[, uniqueN(`Period`), by=`Commodity Code`]
+year <- hs12_value[, uniqueN(`Period`)]
+year_product <- hs12_value[, uniqueN(`Period`), by=`Commodity Code`]
 year_product <- rename(year_product, Years = V1)
 
-pair_product <- unique(setDT(hs12), by = c("Importer", "Exporter", "Commodity Code"))
+pair_product <- unique(setDT(hs12_value), by = c("Importer", "Exporter", "Commodity Code"))
 pair_product <- pair_product[, .N, by= .(`Commodity Code`)]
 pair_product <- rename(pair_product, Pairs = N)
 
@@ -205,17 +124,17 @@ product_coverage$Total_pairs <- pair
 product_coverage$Coverage <- (product_coverage$Years*product_coverage$Pairs)/
   (product_coverage$Total_years*product_coverage$Total_pairs)
 
-product_coverage[order(Coverage)][1:10]
-product_coverage[order(-Coverage)][1:10]
+pander(product_coverage[order(Coverage)][1:10])
+pander(product_coverage[order(-Coverage)][1:10])
 
 rm(year_product, pair_product, product_coverage)
 
 #For each country pair, how many year*product / all possible year*product?
 
-product_pair <- hs12[, uniqueN(`Commodity Code`), by = c("Importer", "Exporter")]
+product_pair <- hs12_value[, uniqueN(`Commodity Code`), by = c("Importer", "Exporter")]
 product_pair <- rename(product_pair, Products = V1)
 
-year_pair <- hs12[, uniqueN(`Period`), by = c("Importer", "Exporter")]
+year_pair <- hs12_value[, uniqueN(`Period`), by = c("Importer", "Exporter")]
 year_pair <- rename(year_pair, Years = V1)
 
 pair_coverage <- merge(product_pair, year_pair, by = c("Importer", "Exporter"))
@@ -226,23 +145,25 @@ pair_coverage$Coverage <- (pair_coverage$Products*pair_coverage$Years)/
   (pair_coverage$T_products*pair_coverage$T_years)
 
 pair_coverage$Exporter <- strtrim(pair_coverage$Exporter, 15)
-pair_coverage[order(Coverage)][1:10]
-pair_coverage[order(-Coverage)][1:10]
+pander(pair_coverage[order(Coverage)][1:10])
+pander(pair_coverage[order(-Coverage)][1:10])
 
-rm(product_pair, year_pair, pair_coverage, pair, product, year)
+rm(product_pair, year_pair, pair_coverage, pair, product, year, hs12_value)
 
 ```
 
 
-**Trade gap over time** 
+##Trade gap over time 
 ```{r value_time, eval=TRUE}
 
-#How has the trade gap changed over time?
+load(paste(DataPath,"Analysis Data/hs12_value.Rda", sep = "/"))
 
-hs12$Period <- as.Date(hs12$Period, "%Y")
-hs12$Period <- floor_date(hs12$Period,"year")
+hs12_value <- hs12_value[, .(Period, `Commodity Code`, Importer, Exporter, Log_gap)]
 
-periods <- hs12[, .(mean = as.double(mean(Log_gap)),
+hs12_value$Period <- as.Date(hs12_value$Period, "%Y")
+hs12_value$Period <- floor_date(hs12_value$Period,"year")
+
+periods <- hs12_value[, .(mean = as.double(mean(Log_gap)),
                     median = as.double(median(Log_gap)),
                     p25 = as.double(quantile(Log_gap,.25)),
                     p75 = as.double(quantile(Log_gap,.75))
@@ -261,13 +182,9 @@ ggplot(data=periods ) +
   xlab(label = "") +
   ylab(label = "Value gap") +
   labs(title="Value Gap Over Time")
-```
-
-**Trade gap across products** 
-```{r value_products, eval=TRUE}
 
 #Across products?
-products <- hs12[, .(mean = as.double(mean(Log_gap)),
+products <- hs12_value[, .(mean = as.double(mean(Log_gap)),
                      median = as.double(median(Log_gap)),
                      p25 = as.double(quantile(Log_gap,.25)),
                      p75 = as.double(quantile(Log_gap,.75))
@@ -279,7 +196,7 @@ ggplot(data=products, aes(mean)) +
                  fill="royalblue4",
                  alpha=.2) +
   background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0,150), minor_breaks = NULL) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0,3000), minor_breaks = NULL) +
   labs(title="Mean Trade Gap Across Products") +
   labs(x="Trade gap", y="Number of products")
 
@@ -288,7 +205,7 @@ ggplot(data=products, aes(median)) +
                  fill="royalblue4",
                  alpha=.2) +
   background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0,350),  breaks=seq(0, 350, 50)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0,6000)) +
   labs(title="Median Trade Gap Across Products") +
   labs(x="Trade gap", y="Number of products")
 
@@ -297,7 +214,7 @@ ggplot(data=products, aes(p25)) +
                  fill="royalblue4",
                  alpha=.2) +
   background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0),  limits = c(0,150), minor_breaks = NULL) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0,2000),  minor_breaks = NULL) +
   labs(title="25th Percentile Trade Gap Across Products") +
   labs(x="Trade gap", y="Number of products")
 
@@ -306,16 +223,12 @@ ggplot(data=products, aes(p75)) +
                  fill="royalblue4",
                  alpha=.2) +
   background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0),  limits = c(0, 150), minor_breaks = NULL) +
+  scale_y_continuous(expand = c(0, 0),  limits = c(0, 2500), minor_breaks = NULL) +
   labs(title="75th Percentile Trade Gap Across Products") +
   labs(x="Trade gap", y="Number of products")
-```
-
-**Trade gap across country pairs** 
-```{r value_pairs, eval=TRUE}
 
 #Across countries?
-countries <- hs12[, .(mean = as.double(mean(Log_gap)),
+countries <- hs12_value[, .(mean = as.double(mean(Log_gap)),
                       median = as.double(median(Log_gap)),
                       p25 = as.double(quantile(Log_gap,.25)),
                       p75 = as.double(quantile(Log_gap,.75))
@@ -327,7 +240,7 @@ ggplot(data=countries, aes(mean)) +
                  fill="royalblue4",
                  alpha=.2) +
   background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0, 1500),  minor_breaks = NULL) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 8000),  minor_breaks = NULL) +
   labs(title="Mean Trade Gap Across Country Pairs") +
   labs(x="Trade gap", y="Number of pairs")
 
@@ -336,7 +249,7 @@ ggplot(data=countries, aes(median)) +
                  fill="royalblue4",
                  alpha=.2) +
   background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0, 2000),  minor_breaks = NULL) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 12000),  minor_breaks = NULL) +
   labs(title="Median Trade Gap Across Country Pairs") +
   labs(x="Trade gap", y="Number of pairs")
 
@@ -345,7 +258,7 @@ ggplot(data=countries, aes(p25)) +
                  fill="royalblue4",
                  alpha=.2) +
   background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0, 1500),  minor_breaks = NULL) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 8000),  minor_breaks = NULL) +
   labs(title="25th Percentile Trade Gap Across Country Pairs") +
   labs(x="Trade gap", y="Number of pairs")
 
@@ -354,28 +267,34 @@ ggplot(data=countries, aes(p75)) +
                  fill="royalblue4",
                  alpha=.2) +
   background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0, 2000),  minor_breaks = NULL) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 8000),  minor_breaks = NULL) +
   labs(title="75th Percentile Trade Gap Across Country Pairs") +
   labs(x="Trade gap", y="Number of pairs")
 
-rm(periods, products, countries)
+rm(periods, products, countries, hs12_value)
 ```
 
-**Year coefficients controlling for product codes and country pairs** 
+##Year coefficients controlling for product codes and country pairs 
 ```{r value_years_reg, eval=TRUE}
 
-hs12$Period <- as.Date(hs12$Period, "%Y")
-hs12$Period <- floor_date(hs12$Period,"year")
+load(paste(DataPath,"Analysis Data/hs12_value.Rda", sep = "/"))
 
-hs12$Period.f <- factor(hs12$Period)
-hs12$Products.f <- factor(hs12$`Commodity Code`)
+hs12_value <- hs12_value[, .(Period, `Commodity Code`, `Reporter Code`, `Partner Code`, Log_gap)]
 
-hs12$Importer.f <- factor(hs12$`Reporter Code`)
-hs12$Exporter.f <- factor(hs12$`Partner Code`)
-hs12$Pairs.f <- with(hs12, interaction(Importer.f, Exporter.f))
+hs12_value$Period <- as.Date(hs12_value$Period, "%Y")
+hs12_value$Period <- floor_date(hs12_value$Period,"year")
+
+hs12_value$Period.f <- factor(hs12_value$Period)
+hs12_value$Products.f <- factor(hs12_value$`Commodity Code`)
+
+hs12_value$Importer.f <- factor(hs12_value$`Reporter Code`)
+hs12_value$Exporter.f <- factor(hs12_value$`Partner Code`)
+hs12_value$Pairs.f <- with(hs12_value, interaction(Importer.f, Exporter.f))
+
+hs12_value <- hs12_value[, .(Period, Log_gap, Period.f, Products.f, Pairs.f)]
 
 reg <- felm(Log_gap ~ 1 | Period.f + Products.f + Pairs.f,
-            data = hs12,
+            data = hs12_value,
             exactDOF = FALSE,
             keepX = FALSE,
             keepCX = FALSE)
@@ -389,7 +308,8 @@ periodfes <- subset(fes,fe == "Period.f")
 
 periodfes$ci_ub <- periodfes$effect + (1.96 * periodfes$se)
 periodfes$ci_lb <- periodfes$effect - (1.96 * periodfes$se)
-periodfes <- merge(periodfes,unique(hs12[,list(Period,Period.f)]),by.x = "idx",by.y="Period.f")
+periodfes <- merge(periodfes,unique(hs12_value[,list(Period,Period.f)]),
+                   by.x = "idx",by.y="Period.f")
 periodfes <- rename(periodfes, period = Period)
 
 ggplot(data = periodfes, aes(period,effect)) +
@@ -400,14 +320,8 @@ ggplot(data = periodfes, aes(period,effect)) +
   scale_y_continuous(expand = c(0, 0), limits = c(-.050,.075), minor_breaks = NULL) +
   xlab(label = "") +
   ylab(label = "Trade gap") +
-  labs(title = "Trade Gap Over Time, Controlling for Product/Country Pair")
-```
+  labs(title = "Trade gap Over Time, Controlling for Product/Country Pairs")
 
-Why the 2016 bump? Could it be something to do with how they revise value estimates when they get more data or convert to most recent HS classification?
-
-
-**Product code coefficients controlling for country pairs and years** 
-```{r value_products_reg, eval=TRUE}
 
 productfes <- subset(fes,fe == "Products.f")
 productfes <- productfes[,c("effect","idx")]
@@ -417,13 +331,9 @@ ggplot(data=productfes, aes(effect)) +
                  fill="royalblue4",
                  alpha=.2) +
   background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0,150), minor_breaks = NULL) +
-  labs(title="Trade Gap Across Products, Controlling for Country Pair/Year") +
+  scale_y_continuous(expand = c(0, 0), minor_breaks = NULL) +
+  labs(title="Mean Trade Gap Across Products, Controlling for Country Pairs/Years") +
   labs(x="Trade gap", y="Number of products")
-```
-
-**Country pair coefficients controlling for years and product codes** 
-```{r value_pairs_reg, eval=TRUE}
 
 pairfes <- subset(fes,fe == "Pairs.f")
 pairfes <- pairfes[,c("effect","idx")]
@@ -433,294 +343,148 @@ ggplot(data=pairfes, aes(effect)) +
                  fill="royalblue4",
                  alpha=.2) +
   background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0,1500), minor_breaks = NULL) +
-  labs(title="Trade Gap Across Country Pairs, Controlling for Product/Year") +
+  scale_y_continuous(expand = c(0, 0), minor_breaks = NULL) +
+  labs(title="Mean Trade Gap Across Country Pairs, Controlling for Products/Years") +
   labs(x="Trade gap", y="Number of country pairs")
 
-rm(fes, hs12, pairfes, periodfes, productfes, reg)
+rm(fes, hs12_value, pairfes, periodfes, productfes, reg)
 
 ```
 
-#Quantity Trade Gap
-The difference between what the exporting country reports and what the importing country reports in netweight (kg). 
+##What data is missing? 
 
-**Coverage**
-```{r quantity_coverage, eval=TRUE}
+The first table looks at how many product x year x partner combinations each country reported as exports (`Reported Exports`), relative to the number of combinations that the same country was reported as a partner (`World Imports`). The second table repeats the first, but looking at imports.  
 
-options(digits=2)
+```{r missing, eval=TRUE}
+#yearXproduct exports reported by country, relative to imports to country reported by world
 
-load(paste(DataPath,"Analysis Data/hs12.Rda", sep = "/"))
-hs12 <- as.data.table(hs12)
+load(paste(DataPath,"Analysis Data/imports_full12.Rda", sep = "/"))
 
-#Remove observations where one or more countries do not report quantities. 748,839 rows deleted. 
-hs12 <- hs12[!is.na(Qty_log_gap)]
+imports_full12 <- rename(imports_full12, "Import Value" = "Trade Value (US$)")
+imports_full12 <- imports_full12[, .(Period, Reporter, Partner, `Commodity Code`, `Import Value`)]
 
-#There are 411 instances where `qty_log_gap` = inf. 
-#I removed them -- something else we should do?
-hs12 <- hs12[!is.infinite(Qty_log_gap)]
+load(paste(DataPath,"Analysis Data/exports_full12.Rda", sep = "/"))
 
-#For each year, how many product*country pairs / all possible product*country pairs?
+exports <- rename(exports, "Export Value" = "Trade Value (US$)")
+exports <- exports[, .(Period, Reporter, Partner, `Commodity Code`, `Export Value`)]
 
-product <- hs12[, uniqueN(`Commodity Code`)]
-product_year <- hs12[, uniqueN(`Commodity Code`), by=Period]
-product_year <- rename(product_year, Products = V1)
+rep_ex <- exports[!is.na(`Export Value`), unique(`Commodity Code`), 
+                  by = c("Reporter", "Period", "Partner")]
+rep_ex <- rep_ex[, .N, by = "Reporter"]
+rep_ex <- rename(rep_ex, "Reported Exports" = "N") 
 
-pair <- unique(setDT(hs12), by = c("Importer", "Exporter"))
-pair <- pair[, .N]
-pair_year <- unique(setDT(hs12), by = c("Importer", "Exporter", "Period"))
-pair_year <- pair_year[, .N, by=Period]
-pair_year <- rename(pair_year, Pairs = N)
+rep_ex2 <- imports_full12[!is.na(`Import Value`), unique(`Commodity Code`), 
+                          by = c("Partner", "Period", "Reporter")]
+rep_ex2 <- rep_ex2[, .N, by = "Partner"]
+rep_ex2 <- rename(rep_ex2, "World Imports" = "N") 
 
-year_coverage <- merge(product_year, pair_year)
-year_coverage$Total_products <- product
-year_coverage$Total_pairs <- pair
+rep_ex <- merge(rep_ex, rep_ex2, by.x = c("Reporter"), by.y = "Partner", all = T)
 
-year_coverage$Coverage <- (year_coverage$Products*year_coverage$Pairs)/
-  (year_coverage$Total_products*year_coverage$Total_pair)
+rep_ex[is.na(rep_ex)] <- 0
+rep_ex$Share_Present <- rep_ex$`Reported Exports` / rep_ex$`World Imports`
 
-year_coverage
-rm(pair_year, product_year, year_coverage)
+rep_ex <- rep_ex[order(Share_Present)]
+rep_ex$Reporter <- strtrim(rep_ex$Reporter, 15)
+print(rep_ex, nrow=245)
 
-#For each product, how many year*country pairs / all possible year*country pairs?
+rm(rep_ex, rep_ex2)
 
-year <- hs12[, uniqueN(`Period`)]
-year_product <- hs12[, uniqueN(`Period`), by=`Commodity Code`]
-year_product <- rename(year_product, Years = V1)
+#yearXproduct imports reported by country, relative to exports to country reported by world
 
-pair_product <- unique(setDT(hs12), by = c("Importer", "Exporter", "Commodity Code"))
-pair_product <- pair_product[, .N, by= .(`Commodity Code`)]
-pair_product <- rename(pair_product, Pairs = N)
+rep_im <- imports_full12[!is.na(`Import Value`), unique(`Commodity Code`), by = c("Reporter", "Period", "Partner")]
+rep_im <- rep_im[, .N, by = "Reporter"]
+rep_im <- rename(rep_im, "Reported Imports" = "N") 
 
-product_coverage <- merge(year_product, pair_product)
-product_coverage$Total_years <- year
-product_coverage$Total_pairs <- pair
+rep_im2 <- exports[!is.na(`Export Value`), unique(`Commodity Code`), by = c("Partner", "Period", "Reporter")]
+rep_im2 <- rep_im2[, .N, by = "Partner"]
+rep_im2 <- rename(rep_im2, "World Exports" = "N") 
 
-product_coverage$Coverage <- (product_coverage$Years*product_coverage$Pairs)/
-  (product_coverage$Total_years*product_coverage$Total_pairs)
+rep_im <- merge(rep_im, rep_im2, by.x = c("Reporter"), by.y = "Partner", all = T)
 
-#Note: Quantity is not reported at the two-digit level
-product_coverage[order(Coverage)][1:10]
-product_coverage[order(-Coverage)][1:10]
+rep_im[is.na(rep_im)] <- 0
+rep_im$Share_Present <- rep_im$`Reported Imports` / rep_im$`World Exports`
 
-rm(year_product, pair_product, product_coverage)
+rep_im <- rep_im[order(Share_Present)]
+rep_im$Reporter <- strtrim(rep_im$Reporter, 15)
+print(rep_im, nrow=245)
 
-#For each country pair, how many year*product / all possible year*product?
-
-product_pair <- hs12[, uniqueN(`Commodity Code`), by = c("Importer", "Exporter")]
-product_pair <- rename(product_pair, Products = V1)
-
-year_pair <- hs12[, uniqueN(`Period`), by = c("Importer", "Exporter")]
-year_pair <- rename(year_pair, Years = V1)
-
-pair_coverage <- merge(product_pair, year_pair, by = c("Importer", "Exporter"))
-pair_coverage$T_products <- product
-pair_coverage$T_years <- year
-
-pair_coverage$Coverage <- (pair_coverage$Products*pair_coverage$Years)/
-  (pair_coverage$T_products*pair_coverage$T_years)
-
-pair_coverage$Exporter <- strtrim(pair_coverage$Exporter, 15)
-pair_coverage[order(Coverage)][1:10]
-pair_coverage[order(-Coverage)][1:10]
-
-rm(product_pair, year_pair, pair_coverage, pair, product, year)
+rm(rep_im, rep_im2, exports, imports_full12)
 ```
 
-**Quantity trade gap over time** 
-```{r quantity_time, eval=TRUE}
+**Origin x year combinations, per commodity code**
+The following tables look at the number of origin x year combinations per reporter (`Reporter Pairs`) vs the number of combinations per partner (`Partner Pairs`) for reported exports and then reported imports.
 
-hs12$Period <- as.Date(hs12$Period, "%Y")
-hs12$Period <- floor_date(hs12$Period,"year")
+```{r missing_code, eval=TRUE}
+#For each product how many origin X month combinations
+load(paste(DataPath,"Analysis Data/imports_full12.Rda", sep = "/"))
 
+imports_full12 <- rename(imports_full12, "Import Value" = "Trade Value (US$)")
+imports_full12 <- imports_full12[, 
+                  .(Period, Reporter, Partner, `Commodity Code`, Commodity, `Import Value`)]
 
-periods <- hs12[, .(mean = as.double(mean(Qty_log_gap)),
-                    median = as.double(median(Qty_log_gap)),
-                    p25 = as.double(quantile(Qty_log_gap,.25)),
-                    p75 = as.double(quantile(Qty_log_gap,.75))
-),
-by=Period]
+load(paste(DataPath,"Analysis Data/exports_full12.Rda", sep = "/"))
 
-periods <- melt(periods, id = 'Period')
-periods$variable <- factor(periods$variable, levels = c("p25","p75","median","mean"))
+exports <- rename(exports, "Export Value" = "Trade Value (US$)")
+exports <- exports[, .(Period, Reporter, Partner, `Commodity Code`, Commodity, `Export Value`)]
 
-ggplot(data=periods ) +
-  geom_line(data=periods, aes(x = Period, y = value, colour = variable, size=variable)) +
-  background_grid(major = 'y', minor = "none") +
-  scale_colour_manual(values=c("grey","grey","black","royalblue4")) +
-  scale_size_manual(values = c(1,1,1.1,1.25)) +
-  scale_y_continuous(expand = c(0, 0), limits = c(-1,1), minor_breaks = NULL) +
-  xlab(label = "") +
-  ylab(label = "Quantity gap") +
-  labs(title="Quantity Gap Over Time")
+prod_ex <- exports[!is.na(`Export Value`), unique(`Reporter`), 
+                   by = c("Commodity", "Period")]
+
+prod_ex <- prod_ex[, .N, by = "Commodity"]
+prod_ex <- rename(prod_ex, "Reporter Pairs" = "N") 
+
+prod_expartner <- imports_full12[!is.na(`Import Value`), unique(`Partner`), by = c("Commodity", "Period")]
+prod_expartner <- prod_expartner[, .N, by = "Commodity"]
+prod_expartner <- rename(prod_expartner, "Partner Pairs" = "N") 
+
+prod_ex <- merge(prod_ex, prod_expartner, by = c("Commodity"), all = T) 
+
+prod_ex$Share <- prod_ex$`Reporter Pairs` / prod_ex$`Partner Pairs`
+
+prod_ex$Commodity <- strtrim(prod_ex$Commodity, 30)
+pander(prod_ex[order(Share)][1:25])
+pander(prod_ex[order(-Share)][1:25])
+
+rm(prod_ex, prod_expartner)
+
+prod_im <- imports_full12[!is.na(`Import Value`), unique(`Reporter`), by = c("Commodity", "Period")]
+prod_im <- prod_im[, .N, by = "Commodity"]
+prod_im <- rename(prod_im, "Reporter Pairs" = "N") 
+
+prod_impartner <- exports[!is.na(`Export Value`), unique(`Partner`), by = c("Commodity", "Period")]
+prod_impartner <- prod_impartner[, .N, by = "Commodity"]
+prod_impartner <- rename(prod_impartner, "Partner Pairs" = "N") 
+
+prod_im <- merge(prod_im, prod_impartner, by = c("Commodity"), all = T)
+
+prod_im$Share <- prod_im$`Reporter Pairs` / prod_im$`Partner Pairs`
+
+prod_im$Commodity <- strtrim(prod_im$Commodity, 50)
+pander(prod_im[order(Share)][1:25])
+pander(prod_im[order(-Share)][1:25])
+
+rm(prod_im, exports, imports_full12)
 ```
 
-**Quantity trade gap across products** 
-```{r quantity_products, eval=TRUE}
+**What does tariff data include?** 
 
-products <- hs12[, .(mean = as.double(mean(Qty_log_gap)),
-                     median = as.double(median(Qty_log_gap)),
-                     p25 = as.double(quantile(Qty_log_gap,.25)),
-                     p75 = as.double(quantile(Qty_log_gap,.75))
-),
-by= `Commodity Code`]
+The following is an example of the non-tariff measure data and tariff data downloaded from WITS. The NTM data can only be downloaded for one country/year pair at a time. The tariff data can be downloaded all at once, but each county/year pair is organized in it's own csv file. Both datasets are organized at the 6-digit product code level, so they should merge with the trade data. 
 
-ggplot(data=products, aes(mean)) +
-  geom_histogram(col="royalblue4",
-                 fill="royalblue4",
-                 alpha=.2) +
-  background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0,300), minor_breaks = NULL) +
-  labs(title="Mean Quantity Gap Across Products") +
-  labs(x="Quantity gap", y="Number of products")
+The tariff data has both most-favored nation and preferential rates. Descriptions of the columns can be found here: wits.worldbank.org/data/public/Help_BulkDownload_TRAINS.pdf
 
-ggplot(data=products, aes(median)) +
-  geom_histogram(col="royalblue4",
-                 fill="royalblue4",
-                 alpha=.2) +
-  background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0)) +
-  labs(title="Median Quantity Gap Across Products") +
-  labs(x="Quantity gap", y="Number of products")
+The NTM data descriptions can be found in the "NTM data dictionary" word document in Dropbox/BJ Customs Evasion/Raw Data. Detailed descriptions of the NTM code classifications can be found here:
+unctad.org/en/PublicationsLibrary/ditctab20122_en.pdf
 
-ggplot(data=products, aes(p25)) +
-  geom_histogram(col="royalblue4",
-                 fill="royalblue4",
-                 alpha=.2) +
-  background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0,200), minor_breaks = NULL) +
-  labs(title="25th Percentile Quantity Gap Across Products") +
-  labs(x="Trade gap", y="Number of products")
 
-ggplot(data=products, aes(p75)) +
-  geom_histogram(col="royalblue4",
-                 fill="royalblue4",
-                 alpha=.2) +
-  scale_y_continuous(expand = c(0, 0), limits = c(0,200), minor_breaks = NULL) +
-  background_grid(major = 'y', minor = "none") +
-  labs(title="75th Percentile Quantity Gap Across Products") +
-  labs(x="Trade gap", y="Number of products")
+```{r tariffs, eval=TRUE}
+
+#Example of NTM data
+NTM <- read.csv(paste(DataPath,"Raw Data/NTM_data_example.csv", sep = "/"))
+NTM <- as.data.table(NTM)
+NTM[1:10]
+
+#Example of tariff data
+tariff <- read.csv(paste(DataPath,"Raw Data/tariff_data_example.csv", sep = "/"))
+tariff <- as.data.table(tariff)
+tariff[1:10]
 ```
-
-**Quantity trade gap across country pairs** 
-```{r quantity_pairs, eval=TRUE}
-
-countries <- hs12[, .(mean = as.double(mean(Qty_log_gap)),
-                      median = as.double(median(Qty_log_gap)),
-                      p25 = as.double(quantile(Qty_log_gap,.25)),
-                      p75 = as.double(quantile(Qty_log_gap,.75))
-),
-by= c("Importer", "Exporter")]
-
-ggplot(data=countries, aes(mean)) +
-  geom_histogram(col="royalblue4",
-                 fill="royalblue4",
-                 alpha=.2) +
-  background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0,2000), minor_breaks = NULL) +
-  labs(title="Mean Quantity Gap Across Country Pairs") +
-  labs(x="Quantity gap", y="Number of pairs")
-
-ggplot(data=countries, aes(median)) +
-  geom_histogram(col="royalblue4",
-                 fill="royalblue4",
-                 alpha=.2) +
-  background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0,2500), minor_breaks = NULL) +
-  labs(title="Median Quantity Gap Across Country Pairs") +
-  labs(x="Quantity gap", y="Number of pairs")
-
-ggplot(data=countries, aes(p25)) +
-  geom_histogram(col="royalblue4",
-                 fill="royalblue4",
-                 alpha=.2) +
-  background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0,1500), minor_breaks = NULL) +
-  labs(title="25th Percentile Quantity Gap Across Country Pairs") +
-  labs(x="Quantity gap", y="Number of pairs")
-
-ggplot(data=countries, aes(p75)) +
-  geom_histogram(col="royalblue4",
-                 fill="royalblue4",
-                 alpha=.2) +
-  background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0,2000), minor_breaks = NULL) +
-  labs(title="75th Percentile Quantity Gap Across Country Pairs") +
-  labs(x="Quantity gap", y="Number of pairs")
-
-rm(periods, products, countries)
-```
-
-**Quantity year coefficients controlling for product codes and country pairs** 
-```{r quantity_years_reg, eval=TRUE}
-
-hs12$Period <- as.Date(hs12$Period, "%Y")
-hs12$Period <- floor_date(hs12$Period,"year")
-
-hs12$Period.f <- factor(hs12$Period)
-hs12$Products.f <- factor(hs12$`Commodity Code`)
-
-hs12$Importer.f <- factor(hs12$`Reporter Code`)
-hs12$Exporter.f <- factor(hs12$`Partner Code`)
-hs12$Pairs.f <- with(hs12, interaction(Importer.f, Exporter.f))
-
-reg <- felm(Qty_log_gap ~ 1 | Period.f + Products.f + Pairs.f,
-            data = hs12,
-            exactDOF = FALSE,
-            keepX = FALSE,
-            keepCX = FALSE)
-
-fes <- getfe(reg,
-             se=TRUE,
-             bN = 50
-)
-
-periodfes <- subset(fes,fe == "Period.f")
-
-periodfes$ci_ub <- periodfes$effect + (1.96 * periodfes$se)
-periodfes$ci_lb <- periodfes$effect - (1.96 * periodfes$se)
-periodfes <- merge(periodfes,unique(hs12[,list(Period,Period.f)]),by.x = "idx",by.y="Period.f")
-periodfes <- rename(periodfes, period = Period)
-
-ggplot(data = periodfes, aes(period,effect)) +
-  geom_errorbar(aes(ymin = ci_lb, ymax = ci_ub), color = "grey35") +
-  geom_line(color = "royalblue4", size = 1) +
-  geom_point(color = "royalblue4") +
-  background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(-.05, .10), breaks=seq(-.05, .10, .05)) +
-  xlab(label = "") +
-  ylab(label = "Quantity gap") +
-  labs(title = "Quantity Gap Over Time, Controlling for Product/Country Pair")
-```
-
-**Quantity product code coefficients controlling for country pairs and years** 
-```{r quantity_products_reg, eval=TRUE}
-
-productfes <- subset(fes,fe == "Products.f")
-productfes <- productfes[,c("effect","idx")]
-
-ggplot(data=productfes, aes(effect)) +
-  geom_histogram(col="royalblue4",
-                 fill="royalblue4",
-                 alpha=.2) +
-  background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0,300), minor_breaks = NULL) +
-  labs(title="Quantity Gap Across Products, Controlling for Country Pair/Year") +
-  labs(x="Quantity gap", y="Number of Products")
-```
-
-**Quantity country pair coefficients controlling for years and product codes** 
-```{r quantity_pairs_reg, eval=TRUE}
-
-pairfes <- subset(fes,fe == "Pairs.f")
-pairfes <- pairfes[,c("effect","idx")]
-
-ggplot(data=pairfes, aes(effect)) +
-  geom_histogram(col="royalblue4",
-                 fill="royalblue4",
-                 alpha=.2) +
-  background_grid(major = 'y', minor = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0,1500), minor_breaks = NULL) +
-  labs(title="Quantity Gap Across Country Pairs, Controlling for Product/Year") +
-  labs(x="Quantity gap", y="Number of country pairs")
-
-rm(fes, hs12, pairfes, periodfes, productfes, reg)
