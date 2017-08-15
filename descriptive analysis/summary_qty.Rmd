@@ -1,3 +1,21 @@
+---
+output: 
+  pdf_document:
+    citation_package: natbib
+    keep_tex: true
+    fig_caption: true
+    latex_engine: pdflatex
+title: "Summary of Yearly Comtrade Data, Quantity Trade Gap"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+geometry: margin=0.75in
+fontfamily: mathpazo
+fontsize: 10pt
+# spacing: double
+endnote: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message=FALSE, fig.width=5, fig.height=3, fig.align="center", fig.path='Figs/')
 library(data.table)
 library(plyr)
 library(ggplot2)
@@ -6,12 +24,22 @@ library(lubridate)
 library(lfe)
 library(gridExtra)
 library(cowplot)
+library(knitr)
 library(pander)
 
 setwd(dirname(path.expand("~")))
 
 DataPath <- file.path(paste(getwd(),"Dropbox/Customs Evasion", sep="/"))
 CodePath <- file.path(paste(getwd(),"Documents/comtrade", sep = "/"))
+
+theme_set(theme_cowplot(font_size=10))
+
+```
+
+This analysis is for the full 2012-2016 yearly Comtrade data using the HS2012 classification. 
+
+
+```{r data clean, eval=FALSE}
 
 load(paste(DataPath,"Analysis Data/hs12_12.Rda", sep = "/"))
 hs12_12 <- hs12_12[!is.na(Qty_log_gap)]
@@ -39,6 +67,17 @@ rm(hs12_12, hs12_13, hs12_14, hs12_15, hs12_16)
 save(hs12_qty,file = paste(DataPath,"Analysis Data","hs12_qty.Rda", sep = "/"))
 
 rm(hs12_qty)
+
+```
+
+#Quantity Trade Gap
+The difference between what the exporting country reports and what the importing country reports in netweight
+(kg).
+
+##Coverage
+```{r qty_coverage, eval=TRUE}
+
+options(digits=2)
 
 #For each year, how many product x o-d pairs / all possible product x o-d pairs?
 
@@ -96,11 +135,11 @@ year_pair <- hs12_qty[, uniqueN(`Period`), by = c("Importer", "Exporter")]
 year_pair <- rename(year_pair, Years = V1)
 
 pair_coverage <- merge(product_pair, year_pair, by = c("Importer", "Exporter"))
-pair_coverage$Total_products <- product
-pair_coverage$Total_years <- year
+pair_coverage$T_products <- product
+pair_coverage$T_years <- year
 
 pair_coverage$Coverage <- (pair_coverage$Products*pair_coverage$Years)/
-  (pair_coverage$Total_products*pair_coverage$Total_years)
+  (pair_coverage$T_products*pair_coverage$T_years)
 
 pair_coverage$Exporter <- strtrim(pair_coverage$Exporter, 15)
 pander(pair_coverage[order(Coverage)][1:10])
@@ -108,7 +147,11 @@ pander(pair_coverage[order(-Coverage)][1:10])
 
 rm(product_pair, year_pair, pair_coverage, pair, product, year, hs12_qty)
 
-#How has the trade gap changed over time?
+```
+
+
+##Quantity trade gap over time 
+```{r qty_time, eval=TRUE}
 
 load(paste(DataPath,"Analysis Data/hs12_qty.Rda", sep = "/"))
 
@@ -118,9 +161,9 @@ hs12_qty$Period <- as.Date(hs12_qty$Period, "%Y")
 hs12_qty$Period <- floor_date(hs12_qty$Period,"year")
 
 periods <- hs12_qty[, .(mean = as.double(mean(Qty_log_gap)),
-                        median = as.double(median(Qty_log_gap)),
-                        p25 = as.double(quantile(Qty_log_gap,.25)),
-                        p75 = as.double(quantile(Qty_log_gap,.75))
+                          median = as.double(median(Qty_log_gap)),
+                          p25 = as.double(quantile(Qty_log_gap,.25)),
+                          p75 = as.double(quantile(Qty_log_gap,.75))
 ),
 by=Period]
 
@@ -139,9 +182,9 @@ ggplot(data=periods ) +
 
 #Across products?
 products <- hs12_qty[, .(mean = as.double(mean(Qty_log_gap)),
-                         median = as.double(median(Qty_log_gap)),
-                         p25 = as.double(quantile(Qty_log_gap,.25)),
-                         p75 = as.double(quantile(Qty_log_gap,.75))
+                           median = as.double(median(Qty_log_gap)),
+                           p25 = as.double(quantile(Qty_log_gap,.25)),
+                           p75 = as.double(quantile(Qty_log_gap,.75))
 ),
 by= `Commodity Code`]
 
@@ -183,9 +226,9 @@ ggplot(data=products, aes(p75)) +
 
 #Across countries?
 countries <- hs12_qty[, .(mean = as.double(mean(Qty_log_gap)),
-                          median = as.double(median(Qty_log_gap)),
-                          p25 = as.double(quantile(Qty_log_gap,.25)),
-                          p75 = as.double(quantile(Qty_log_gap,.75))
+                            median = as.double(median(Qty_log_gap)),
+                            p25 = as.double(quantile(Qty_log_gap,.25)),
+                            p75 = as.double(quantile(Qty_log_gap,.75))
 ),
 by= c("Importer", "Exporter")]
 
@@ -226,8 +269,10 @@ ggplot(data=countries, aes(p75)) +
   labs(x="Quantity gap", y="Number of pairs")
 
 rm(periods, products, countries, hs12_qty)
+```
 
-#Regress trade gap on dummies and plot coefficients 
+##Year coefficients controlling for product codes and country pairs 
+```{r qty_years_reg, eval=TRUE}
 
 load(paste(DataPath,"Analysis Data/hs12_qty.Rda", sep = "/"))
 
@@ -260,7 +305,8 @@ periodfes <- subset(fes,fe == "Period.f")
 
 periodfes$ci_ub <- periodfes$effect + (1.96 * periodfes$se)
 periodfes$ci_lb <- periodfes$effect - (1.96 * periodfes$se)
-periodfes <- merge(periodfes,unique(hs12_qty[,list(Period,Period.f)]),by.x = "idx",by.y="Period.f")
+periodfes <- merge(periodfes,unique(hs12_qty[,list(Period,Period.f)]),
+                   by.x = "idx",by.y="Period.f")
 periodfes <- rename(periodfes, period = Period)
 
 ggplot(data = periodfes, aes(period,effect)) +
@@ -300,12 +346,20 @@ ggplot(data=pairfes, aes(effect)) +
 
 rm(fes, hs12_qty, pairfes, periodfes, productfes, reg)
 
+```
+
+##What data is missing? 
+
+The first table looks at how many product x year x partner combinations each country reported as exports (`Reported Exports`), relative to the number of combinations that the same country was reported as a partner (`World Imports`). The second table repeats the first, but looking at imports.  
+
+```{r missing, eval=TRUE}
 #yearXproduct exports reported by country, relative to imports to country reported by world
 
 load(paste(DataPath,"Analysis Data/imports_full12.Rda", sep = "/"))
 
 imports_full12 <- rename(imports_full12, "Import Netweight (kg)" = "Netweight (kg)")
-imports_full12 <- imports_full12[, .(Period, Reporter, Partner, `Commodity Code`, `Import Netweight (kg)`)]
+imports_full12 <- imports_full12[, 
+                      .(Period, Reporter, Partner, `Commodity Code`, `Import Netweight (kg)`)]
 
 imports_full12[`Import Netweight (kg)`==""]$`Import Netweight (kg)` <- NA
 
@@ -317,11 +371,13 @@ exports <- exports[, .(Period, Reporter, Partner, `Commodity Code`, `Export Netw
 exports[`Export Netweight (kg)`==""]$`Export Netweight (kg)` <- NA
 
 
-rep_ex <- exports[!is.na(`Export Netweight (kg)`), unique(`Commodity Code`), by = c("Reporter", "Period", "Partner")]
+rep_ex <- exports[!is.na(`Export Netweight (kg)`), unique(`Commodity Code`), 
+                  by = c("Reporter", "Period", "Partner")]
 rep_ex <- rep_ex[, .N, by = "Reporter"]
 rep_ex <- rename(rep_ex, "Reported Exports" = "N") 
 
-rep_ex2 <- imports_full12[!is.na(`Import Netweight (kg)`), unique(`Commodity Code`), by = c("Partner", "Period", "Reporter")]
+rep_ex2 <- imports_full12[!is.na(`Import Netweight (kg)`), unique(`Commodity Code`), 
+                          by = c("Partner", "Period", "Reporter")]
 rep_ex2 <- rep_ex2[, .N, by = "Partner"]
 rep_ex2 <- rename(rep_ex2, "World Imports" = "N") 
 
@@ -338,11 +394,13 @@ rm(rep_ex, rep_ex2)
 
 #yearXproduct imports reported by country, relative to exports to country reported by world
 
-rep_im <- imports_full12[!is.na(`Import Netweight (kg)`), unique(`Commodity Code`), by = c("Reporter", "Period", "Partner")]
+rep_im <- imports_full12[!is.na(`Import Netweight (kg)`), unique(`Commodity Code`), 
+                         by = c("Reporter", "Period", "Partner")]
 rep_im <- rep_im[, .N, by = "Reporter"]
 rep_im <- rename(rep_im, "Reported Imports" = "N") 
 
-rep_im2 <- exports[!is.na(`Export Netweight (kg)`), unique(`Commodity Code`), by = c("Partner", "Period", "Reporter")]
+rep_im2 <- exports[!is.na(`Export Netweight (kg)`), unique(`Commodity Code`), 
+                   by = c("Partner", "Period", "Reporter")]
 rep_im2 <- rep_im2[, .N, by = "Partner"]
 rep_im2 <- rename(rep_im2, "World Exports" = "N") 
 
@@ -356,54 +414,66 @@ rep_im$Reporter <- strtrim(rep_im$Reporter, 15)
 print(rep_im, nrow=245)
 
 rm(rep_im, rep_im2, exports, imports_full12)
+```
 
+###Origin x year combinations, per commodity code
+The following tables look at the number of origin x year combinations per reporter (`Reporter Pairs`) vs the number of combinations per partner (`Partner Pairs`) for reported exports and then reported imports.
+
+```{r missing_code, eval=TRUE}
 #For each product how many origin X month combinations
 load(paste(DataPath,"Analysis Data/imports_full12.Rda", sep = "/"))
 
 imports_full12 <- rename(imports_full12, "Import Netweight (kg)" = "Netweight (kg)")
-imports_full12 <- imports_full12[, .(Period, Reporter, Partner, `Commodity Code`, Commodity, `Import Netweight (kg)`)]
+imports_full12 <- imports_full12[, 
+                .(Period, Reporter, Partner, `Commodity Code`, Commodity, `Import Netweight (kg)`)]
 
 imports_full12[`Import Netweight (kg)`==""]$`Import Netweight (kg)` <- NA
 
 load(paste(DataPath,"Analysis Data/exports_full12.Rda", sep = "/"))
 
 exports <- rename(exports, "Export Netweight (kg)" = "Netweight (kg)")
-exports <- exports[, .(Period, Reporter, Partner, `Commodity Code`, Commodity, `Export Netweight (kg)`)]
+exports <- exports[, 
+            .(Period, Reporter, Partner, `Commodity Code`, Commodity, `Export Netweight (kg)`)]
 
 exports[`Export Netweight (kg)`==""]$`Export Netweight (kg)` <- NA
 
-prod_ex <- exports[!is.na(`Export Netweight (kg)`), unique(`Reporter`), by = c("Commodity", "Period")]
+prod_ex <- exports[!is.na(`Export Netweight (kg)`), unique(`Reporter`), 
+                   by = c("Commodity", "Period")]
 prod_ex <- prod_ex[, .N, by = "Commodity"]
-prod_ex <- rename(prod_ex, "Reporter Export Pairs" = "N") 
+prod_ex <- rename(prod_ex, "Reporter Pairs" = "N") 
 
-prod_expartner <- imports_full12[!is.na(`Import Netweight (kg)`), unique(`Partner`), by = c("Commodity", "Period")]
+prod_expartner <- imports_full12[!is.na(`Import Netweight (kg)`), unique(`Partner`), 
+                                 by = c("Commodity", "Period")]
 prod_expartner <- prod_expartner[, .N, by = "Commodity"]
-prod_expartner <- rename(prod_expartner, "Partner Export Pairs" = "N") 
+prod_expartner <- rename(prod_expartner, "Partner Pairs" = "N") 
 
 prod_ex <- merge(prod_ex, prod_expartner, by = c("Commodity"), all = T) 
 
-prod_ex$Share <- prod_ex$`Reporter Export Pairs` / prod_ex$`Partner Export Pairs`
+prod_ex$Share <- prod_ex$`Reporter Pairs` / prod_ex$`Partner Pairs`
 
 prod_ex$Commodity <- strtrim(prod_ex$Commodity, 50)
-prod_ex[order(Share)][1:25]
-prod_ex[order(-Share)][1:25]
+pander(prod_ex[order(Share)][1:25])
+pander(prod_ex[order(-Share)][1:25])
 
 rm(prod_ex, prod_expartner)
 
-prod_im <- imports_full12[!is.na(`Import Netweight (kg)`), unique(`Reporter`), by = c("Commodity", "Period")]
+prod_im <- imports_full12[!is.na(`Import Netweight (kg)`), unique(`Reporter`), 
+                          by = c("Commodity", "Period")]
 prod_im <- prod_im[, .N, by = "Commodity"]
-prod_im <- rename(prod_im, "Reporter Import Pairs" = "N") 
+prod_im <- rename(prod_im, "Reporter Pairs" = "N") 
 
-prod_impartner <- exports[!is.na(`Export Netweight (kg)`), unique(`Partner`), by = c("Commodity", "Period")]
+prod_impartner <- exports[!is.na(`Export Netweight (kg)`), unique(`Partner`), 
+                          by = c("Commodity", "Period")]
 prod_impartner <- prod_impartner[, .N, by = "Commodity"]
-prod_impartner <- rename(prod_impartner, "Partner Import Pairs" = "N") 
+prod_impartner <- rename(prod_impartner, "Partner Pairs" = "N") 
 
 prod_im <- merge(prod_im, prod_impartner, by = c("Commodity"), all = T)
 
-prod_im$Share <- prod_im$`Reporter Import Pairs` / prod_im$`Partner Import Pairs`
+prod_im$Share <- prod_im$`Reporter Pairs` / prod_im$`Partner Pairs`
 
 prod_im$Commodity <- strtrim(prod_im$Commodity, 50)
-prod_im[order(Share)][1:25]
-prod_im[order(-Share)][1:25]
+pander(prod_im[order(Share)][1:25])
+pander(prod_im[order(-Share)][1:25])
 
 rm(prod_im, prod_impartner, exports, imports_full12)
+```
